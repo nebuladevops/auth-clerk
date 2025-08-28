@@ -4,6 +4,8 @@ import { useSignUp } from '@clerk/nextjs'
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
+import { errorService } from '@/services/errorService'
+import { ProcessedError } from '@/types/error'
 
 export default function SignUpPage() {
   const { isLoaded, signUp, setActive } = useSignUp()
@@ -14,7 +16,7 @@ export default function SignUpPage() {
   const [verifying, setVerifying] = useState(false)
   const [code, setCode] = useState('')
   const [isLoading, setIsLoading] = useState(false)
-  const [error, setError] = useState('')
+  const [error, setError] = useState<ProcessedError | null>(null)
   const router = useRouter()
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -22,7 +24,7 @@ export default function SignUpPage() {
     if (!isLoaded) return
 
     setIsLoading(true)
-    setError('')
+    setError(null)
 
     try {
       await signUp.create({
@@ -34,8 +36,10 @@ export default function SignUpPage() {
 
       await signUp.prepareEmailAddressVerification({ strategy: 'email_code' })
       setVerifying(true)
-    } catch (err: any) {
-      setError(err.errors?.[0]?.message || 'Error al crear cuenta')
+    } catch (err) {
+      const processedError = errorService.processError(err)
+      errorService.logError(processedError)
+      setError(processedError)
     } finally {
       setIsLoading(false)
     }
@@ -46,7 +50,7 @@ export default function SignUpPage() {
     if (!isLoaded) return
 
     setIsLoading(true)
-    setError('')
+    setError(null)
 
     try {
       const completeSignUp = await signUp.attemptEmailAddressVerification({
@@ -54,14 +58,17 @@ export default function SignUpPage() {
       })
 
       if (completeSignUp.status !== 'complete') {
-        setError('Error en la verificación')
+        const processedError = errorService.processError('Error en la verificación')
+        setError(processedError)
         return
       }
 
       await setActive({ session: completeSignUp.createdSessionId })
       router.push('/')
-    } catch (err: any) {
-      setError(err.errors?.[0]?.message || 'Error en la verificación')
+    } catch (err) {
+      const processedError = errorService.processError(err)
+      errorService.logError(processedError)
+      setError(processedError)
     } finally {
       setIsLoading(false)
     }
@@ -228,8 +235,10 @@ export default function SignUpPage() {
               </div>
 
               {error && (
-                <div className="text-red-600 text-sm">{error}</div>
+                <div className="text-red-600 text-sm">{error.message}</div>
               )}
+
+              <div id="clerk-captcha"></div>
 
               <button
                 type="submit"
@@ -258,7 +267,7 @@ export default function SignUpPage() {
             </div>
             
             {error && (
-              <div className="text-red-600 text-sm">{error}</div>
+              <div className="text-red-600 text-sm">{error.message}</div>
             )}
 
             <button

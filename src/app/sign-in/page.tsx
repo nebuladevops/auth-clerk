@@ -4,13 +4,15 @@ import { useSignIn } from '@clerk/nextjs'
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
+import { errorService } from '@/services/errorService'
+import { ProcessedError } from '@/types/error'
 
 export default function SignInPage() {
   const { isLoaded, signIn, setActive } = useSignIn()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [isLoading, setIsLoading] = useState(false)
-  const [error, setError] = useState('')
+  const [error, setError] = useState<ProcessedError | null>(null)
   const router = useRouter()
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -18,7 +20,7 @@ export default function SignInPage() {
     if (!isLoaded) return
 
     setIsLoading(true)
-    setError('')
+    setError(null)
 
     try {
       const result = await signIn.create({
@@ -30,8 +32,10 @@ export default function SignInPage() {
         await setActive({ session: result.createdSessionId })
         router.push('/')
       }
-    } catch (err: any) {
-      setError(err.errors?.[0]?.message || 'Error al iniciar sesión')
+    } catch (err) {
+      const processedError = errorService.processError(err)
+      errorService.logError(processedError)
+      setError(processedError)
     } finally {
       setIsLoading(false)
     }
@@ -165,8 +169,10 @@ export default function SignInPage() {
           </div>
 
           {error && (
-            <div className="text-red-600 text-sm">{error}</div>
+            <div className="text-red-600 text-sm">{error.message}</div>
           )}
+
+          <div id="clerk-captcha"></div>
 
           <button
             type="submit"
